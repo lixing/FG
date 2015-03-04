@@ -1,0 +1,17 @@
+#
+# This is a skeleton pkg-config file for FG.  It will almost certainly not
+# work.  At this point, it exists only to remember the format of the
+# pkg-config config file.
+#
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: fg
+Description: the FG programming environment for pipeline-structured programs
+Version: @VERSION@
+Libs: -L${libdir} -lfg
+Cflags: -I${includedir}
+

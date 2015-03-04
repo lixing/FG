@@ -1,0 +1,12 @@
+#!/bin/sh
+
+export LD_LIBRARY_PATH=../lib:../modules
+
+rm -f 0.in 1.in
+dd if=/dev/zero    of=0.in bs=1k count=1 &>/dev/null
+dd if=/dev/urandom of=1.in bs=1k count=1 &>/dev/null
+
+../bin/pin-array-test >pin-array-test.out 2>pin-array-test.err
+
+xxd combine.out
+

@@ -1,0 +1,19 @@
+set_bufcount default 10
+set_bufsize default 4096
+
+stage read-file r
+stage sort s1
+stage dsort-scatter scatter
+
+connect r.data_out s1.data_in
+connect s1.data_out scatter.data_in
+
+stage dsort-gather gather
+stage sort s2
+stage multiwrite-file w
+
+connect gather.data_out s2.data_in
+connect s2.data_out w.data_in
+
+set_bufcount r.buf_in 15
+

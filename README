@@ -1,0 +1,272 @@
+FG 2.0 Documentation
+
+1.  Code organization and building FG 2.0
+2.  FG 2.0 philosophy
+3.  FG 2.0 functions
+4.  Building a program with FG 2.0
+5.  Defining your own stages
+6.  Using config files to define networks
+
+
+
+1.  Code organization and building FG 2.0
+
+The root of the source tree contains several files and directories:
+
+    bin             source code for user programs
+    config          sample config files
+    experiments     scripts to generate data sets for experiments
+    fg.pc.in        skeleton input file for pkg-config
+    lib             source code for FG 2.0 library
+    Makefile
+    modules         source code for stage definition modules
+    README
+    scripts         shell scripts used to run user programs with correct
+                    parameters
+
+Running "make" in the root will build lib, modules, and bin.  You may have to
+edit bin/Makefile and modules/Makefile to specify the location of MPICH2.  The
+FG 2.0 library is produced as lib/libfg.so, modules will be produced as
+modules/*.so, and application binaries are produced directly in the bin
+directory.
+
+
+2.  FG 2.0 philosophy
+
+Version 1.x of FG provided a framework to develop software pipelines.  Version
+2.0 provides a more general framework to develop software networks that allow
+for a more elegant and concise description of computations.  FG's basic unit
+of data is the _buffer_, which flows through a _network_ consisting of a set
+of _stages_.
+
+To construct an FG 2.0 network, the application programmer must instantiate a
+set of stages, each of whose functionality is specified in a _stage
+definition_ (contained within a loadable module---writing stage definitions
+will be covered later).  A stage definition specifies _input pins_ and _output
+pins_ for that stage; to create the network, input pins must be connected to
+output pins.  Any unconnected input pins are assumed to be buffer sources and
+any unconnected output pins are assumed to be buffer sinks.
+
+A stage operates by _accepting_ buffers from input pins, performing
+computation, and _conveying_ buffers along output pins.  A buffer conveyed
+along an output pin is automatically enqueued on the connected input pin.  If
+the output pin is a buffer sink, the buffer is automatically recycled back to
+the pin on which it entered the network.
+
+Buffers are created when the pipeline is fixed.  The default number and size
+of buffers are defined on a network-wide level, but can be overridden on a
+per-pin basis.
+
+Pin arrays allow a stage definition to be written without knowing exactly how
+many inputs or output it will have.  This is especially useful for, eg, a
+stage implementing merge sort.
+
+To expedite development, the application programmer may want to create a
+single network, duplicate it, modify it, and then combine the two.  These
+operations are allowed. 
+
+
+3.  FG 2.0 functions
+
+The file lib/FG.h contains all prototypes necessary to write an FG-ized
+program.  A brief description of each follows.
+
+    int fg_init(int *argc, char **argv[]);
+
+Initializes the FG library.  Must be called before any other fg_* functions.
+
+    int fg_fini(void);
+
+Shuts down the FG library.  Should be called after FG functionality is no
+longer needed.
+
+    FG_network *fg_network_create(const char *name, uint32_t default_bufcount,
+            uint32_t default_bufsize);
+
+Creates an empty network with the given name and default buffer counts and
+sizes.
+
+    void fg_network_set_default_bufcount(FG_network *nw,
+            uint32_t default_bufcount);
+    void fg_network_set_default_bufsize(FG_network *nw,
+            uint32_t default_bufsize);
+
+Sets the default buffer count and size for the given network, in bytes.
+
+    void fg_network_destroy(FG_network *nw);
+
+Frees memory related to given network.
+
+    int fg_network_fix(FG_network *nw);
+
+Tells FG that the given network has been fully specified and no further
+changes will be made.  Must be run before fg_network_run(nw).
+
+    void fg_network_run(FG_network *nw);
+
+Runs the given network.
+
+    void fg_network_print(FG_network *nw);
+
+Prints a summary of the given network construction to stdout.
+
+    FG_stage *fg_network_get_stage_by_name(FG_network *nw,
+            const char *stage_name);
+
+Given a network and a stage name, returns the stage with the given name from
+that network.  Returns NULL if such a stage does not exist.
+
+    int fg_network_set_param(FG_network *nw, char *param, const char *value);
+    char *fg_network_get_param(FG_network *nw, const char *param);
+
+Get and set network-level parameters.
+
+    int fg_network_rename_param(FG_network *nw, const char *stage_name,
+            const char *param_name, const char *new_name);
+
+Establish "new_name" as a network-level synonym for the "param_name" parameter
+of "stage_name" in the given network.
+
+    FG_network *fg_network_copy(FG_network *nw, const char *name);
+
+Create a deep copy of a given network; the copy will have the name specified.
+
+    int fg_network_merge(FG_network *nw1, FG_network *nw2);
+
+Merge the structure of nw2 into nw1.  All stages in nw2 will have the name of
+nw2 and a dot prepended to them to prevent name clashes.
+
+    FG_stage *fg_stage_create(FG_network *nw, const char *stage_def_name,
+            const char *stage_name);
+
+Create a stage in the given network, from the given stage defintion, and give
+it the name "stage_name".
+
+    int fg_stage_set_param(FG_stage *stage, const char *param,
+            const char *value);
+    char *fg_stage_get_param(FG_stage *stage, const char *param);
+
+Get and set stage-level parameters.
+
+    FG_pin *fg_stage_pin_get_by_name(FG_stage *stage, const char *name);
+
+Given a stage and a pin name, retrieve the pin structure.
+
+    int fg_pin_connect(FG_stage *ins, const char *inp, FG_stage *outs,
+            const char *outp);
+
+Connect the pin named "inp" on stage "ins" to the pin named "outp" on stage
+"outs".
+
+    void fg_pin_set_buffer_size(FG_pin *pin, uint32_t size);
+    void fg_pin_set_buffer_count(FG_pin *pin, uint32_t count);
+
+Set buffer count and size for a particular pin.
+
+
+4.  Building a program with FG 2.0
+
+The file bin/sort.c contains a small sample FG program.  Most FG programs will
+follow this pattern: initialize the library, create a network, create a bunch
+of stages, set parameters for those stages, connect pins between stages, fix,
+and run.
+
+The file bin/dsort-pass1.c demonstrates both a disjoint network structure as
+well as using an external library (in this case MPI).
+
+The file bin/dsort-pass2.c demonstrates both an intersecting network structure
+as well as per-pin buffer count and size overrides.  Note that many instances
+of the "read-file" stage are connected to the same "data_in" pin of the merge
+stage; this works because the "data_in" pin of the merge stage is a pin array.
+
+The file bin/network-copy-test.c demonstrates creating a copy of a network.
+
+The file bin/network-merge-test.c demonstrates merging two separate networks
+into a single network.
+
+The file bin/param-rename-test.c demonstrates renaming stage parameters at the
+network level.
+
+The file bin/Makefile contains demonstrates how to build a program with the FG
+library.  In short, for compilation, you must use "-I/path/to/FG/headers" and
+for linking, you must use "-L/path/to/FG/lib -lfg" (both sets of flags
+are in addition to any other necessary compilation flags).
+
+To run an FG program, you must set the LD_LIBRARY_PATH environment variable to
+point to both the location of FG and the location of the FG modules, like so:
+"export LD_LIBRARY_PATH=/path/to/FG/lib:/path/to/FG/modules".
+
+
+5.  Defining your own stages
+
+Stage definitions are contained within loadable modules, examples are
+available in the modules subdirectory.
+
+Important things to note:
+
+- You must #include "fg_internal.h"
+
+- Each module file must define two variables:
+
+    char *fg_module_name --- a short string describing the module
+
+    FG_stage_def fg_module_export[] --- a NULL-terminated list of FG_stage_def
+        structures contained within that module
+
+- A stage definition contains seven parameters, from fg_internal.h:
+
+    const char *name
+    const char *doc
+    int (*init)(FG_stage *stage) --- called when a stage is instantiated with
+            this definition
+    int (*func)(FG_stage *stage) --- called in a loop to perform stage
+            operation; if this function returns anything but FG_STAGE_SUCCESS,
+            the loop will terminate
+    void (*fini)(FG_stage *stage) --- called when the stage is destroyed,
+            which is implicitly called when the pipeline containing this
+            stage is destroyed
+    FG_pin *pins --- a NULL-terminated list structures defining the stage's 
+            pins
+    const char **params --- a NULL-terminated list of strings defining the
+            stage's parameters
+
+- A pin is defined by the FG_pin struct, which contains two fields: the name
+  of the pin and its direction.  Direction must be one of PIN_IN, PIN_OUT,
+  PIN_ARRAY_IN, and PIN_ARRAY_OUT.
+
+
+6.  Using config files to define networks
+
+FG 2.0 also allows the application programmer to define the structure of a
+network in a declarative form.  Such a config file is fed to the function
+fg_network_from_config(), which returns a constructed network.  Config files
+support the following directives:
+
+    stage [stage_def_name] [stage_name]
+
+Creates a stage with name "stage_name" from stage definition "stage_def_name".
+
+    connect s1.p1 s2.p2
+
+Connects pin named "p1" on stage named "s1" to pin named "p2" on stage named
+"s2".
+
+    set_bufcount [pin] [int]
+    set_bufsize [pin] [int]
+
+Sets buffer size and count for a given pin.  If "pin" is "default", sets it
+for entire network.
+
+    loop [n] [directive]
+
+Executes "directive" n times.  All instances of the literal "$" in "directive"
+are replaced with the current loop iteration.  For example,
+
+    loop 3 stage read-file r$
+
+is equivalent to
+
+    stage read-file0
+    stage read-file1
+    stage read-file2
+

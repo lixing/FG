@@ -1,0 +1,10 @@
+#!/bin/sh
+
+export LD_LIBRARY_PATH=../lib:../modules
+
+rm -f sort.out
+dd if=/dev/urandom of=sort.in bs=1k count=1 &>/dev/null
+../bin/sort
+
+#xxd sort.out
+

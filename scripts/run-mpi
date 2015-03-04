@@ -1,0 +1,10 @@
+#!/bin/sh
+
+num_procs=2
+cmd=new-test
+
+mpi_root="/opt/mpich2/bin"
+mpirun="$mpi_root/mpirun"
+
+mpirun -np $num_procs $cmd
+

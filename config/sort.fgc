@@ -1,0 +1,11 @@
+stage read-file r
+set r.filename sort.in
+
+stage sort s
+
+stage write-file w
+set w.filename sort.out
+
+connect r.data_out s.data_in
+connect s.data_out w.data_in
+

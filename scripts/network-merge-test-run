@@ -1,0 +1,17 @@
+#!/bin/sh
+
+export LD_LIBRARY_PATH=../lib:../modules
+
+rm -f *.std{out,err} *.out
+
+dd if=/dev/urandom of=0.in bs=1k count=1 &>/dev/null
+dd if=/dev/urandom of=1.in bs=1k count=1 &>/dev/null
+
+mpiexec -n 2 sh -c '../bin/network-merge-test >$PMI_RANK.stdout 2>$PMI_RANK.stderr'
+
+if diff -q 0.in 1.out && diff -q 1.in 0.out; then
+    echo "success"
+else
+    echo "failure"
+fi
+

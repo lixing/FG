@@ -1,0 +1,16 @@
+#!/bin/sh
+
+export LD_LIBRARY_PATH=../lib:../modules
+
+n=4
+
+rm -f [0-9].in
+
+for i in $(seq 0 $(($n-1)) ); do
+    dd if=/dev/urandom of=$i.in bs=256 count=1 &>/dev/null
+done
+
+../bin/merge-test $n >merge-test.out 2>merge-test.err
+
+#xxd merge.out 
+

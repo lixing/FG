@@ -1,0 +1,37 @@
+#!/bin/sh
+
+MPICH_ROOT=/home/pete/mpich2-1.4
+FG_ROOT=/home/pete/shiznat/school/research/fg/fg-2.0/src
+
+export PATH=$PATH:$MPICH_ROOT/bin:$FG_ROOT/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$MPICH_ROOT/lib:$FG_ROOT/lib:$FG_ROOT/modules
+
+os_ratio=64
+n=4
+
+echo -n "start: "
+date
+
+time mpiexec -n $n sh -c "
+    dsort-pass0 $os_ratio \${PMI_RANK}.in >\$PMI_RANK.stdout 2>\$PMI_RANK.stderr"
+echo "pass 0 done"
+
+time mpiexec -n $n sh -c "
+    dsort-pass1-cfg $FG_ROOT/config/dsort-pass1.fgc >>\$PMI_RANK.stdout 2>>\$PMI_RANK.stderr"
+echo "pass 1 done"
+
+time mpiexec -n $n sh -c "
+    dsort-pass2-cfg pass2-\$PMI_RANK.fcg \$PMI_RANK >>\$PMI_RANK.stdout 2>>\$PMI_RANK.stderr"
+echo "pass 2 done"
+
+output_files=$( for i in $(seq 0 $(( $n - 1 )) ); do echo $i.out ; done )
+sort-verify $output_files
+if [ "$?" == "0" ]; then
+    echo "output verified"
+else
+    echo "output failed verification"
+fi
+
+echo -n "finished: "
+date
+
